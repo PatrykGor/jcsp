@@ -1,96 +1,55 @@
 package org.example.jcsp;
-
-import org.example.condition.Buffer;
-import org.jcsp.lang.Alternative;
-import org.jcsp.lang.AltingChannelInput;
-import org.jcsp.lang.CSProcess;
-import org.jcsp.lang.ChannelOutput;
+import org.jcsp.lang.*;
+import java.util.Random;
 
 class Producer implements CSProcess {
-    private final ChannelOutput<BufferMessage>[] bufferInputs;
-    private final AltingChannelInput<BufferMessage>[] producerInputs;
+    private final ChannelOutput<BufferMessage>[] toBuffers;
+    private final AltingChannelInput<BufferMessage>[] fromBuffers;
     private final int producerId;
-    private final int totalItems;
-    private int itemsProduced = 0;
-    private int requestId = 0;
+    private final Random random = new Random();
 
-    public Producer(ChannelOutput<BufferMessage>[] bufferInputs, AltingChannelInput<BufferMessage>[] producerInputs,
-                    int producerId, int totalItems) {
-        this.bufferInputs = bufferInputs;
-        this.producerInputs = producerInputs;
+    public Producer(ChannelOutput<BufferMessage>[] toBuffers,
+                    AltingChannelInput<BufferMessage>[] fromBuffers,
+                    int producerId) {
+        this.toBuffers = toBuffers;
+        this.fromBuffers = fromBuffers;
         this.producerId = producerId;
-        this.totalItems = totalItems;
     }
 
     @Override
     public void run() {
-        final Alternative alt = new Alternative(producerInputs);
-        final int[] pendingRequests = new int[bufferInputs.length]; // Track which buffer has pending requests
+        System.out.println("Producer " + producerId + " STARTED.");
+        int itemCounter = 0;
+        int requestId = 0;
 
-        System.out.println("Producer " + producerId + " started, will produce " + totalItems + " items");
+        while (true) {
+            // 1. Losowa przerwa (symulacja produkcji)
+            try {
+                Thread.sleep(random.nextInt(1000) + 500); // 0.5s - 1.5s
+            } catch (InterruptedException e) {}
 
-        while (itemsProduced < totalItems) {
-            // Try to produce new items if we have capacity
-            while (itemsProduced + countPendingRequests(pendingRequests) < totalItems &&
-                    itemsProduced < totalItems) {
+            // 2. Wybór losowego bufora
+            int targetBuf = random.nextInt(toBuffers.length);
+            int item = producerId * 1000 + itemCounter;
+            requestId++;
 
-                int randomBuffer = (int) (Math.random() * bufferInputs.length);
-                int item = producerId * 1000 + itemsProduced;
-                requestId++;
+            // 3. Wysłanie żądania (BLOKUJĄCE, jeśli bufor jest zajęty obsługą innego wątku)
+            BufferMessage req = new BufferMessage(BufferMessage.Type.PUT_REQUEST, item, requestId, false);
+            // System.out.println("Prod " + producerId + " trying to PUT " + item + " to Buf " + targetBuf);
+            toBuffers[targetBuf].write(req);
 
-                // Send PUT request to random buffer
-                BufferMessage request = new BufferMessage(
-                        BufferMessage.Type.PUT_REQUEST,
-                        item,
-                        requestId,
-                        false
-                );
+            // 4. Odbiór odpowiedzi (BLOKUJĄCE - czekamy aż ten konkretny bufor odpowie)
+            // Nie potrzebujemy Alternative, bo wiemy dokładnie, gdzie wysłaliśmy
+            BufferMessage response = fromBuffers[targetBuf].read();
 
-                bufferInputs[randomBuffer].write(request);
-                pendingRequests[randomBuffer]++;
-
-                System.out.println("Producer " + producerId + ": sent PUT request#" +
-                        requestId + " to Buffer " + randomBuffer + ", item=" + item);
-
-                // Small delay between requests
-                try { Thread.sleep(100); } catch (InterruptedException e) {}
-            }
-
-            // Wait for responses
-            if (hasPendingRequests(pendingRequests)) {
-                int index = alt.select();
-                BufferMessage response = (BufferMessage) producerInputs[index].read();
-
-                if (response.type == BufferMessage.Type.PUT_RESPONSE) {
-                    pendingRequests[index]--;
-
-                    if (response.success) {
-                        itemsProduced++;
-                        System.out.println("Producer " + producerId + ": PUT confirmed for request#" +
-                                response.requestId + ", total produced=" + itemsProduced);
-                    } else {
-                        System.out.println("Producer " + producerId + ": PUT rejected for request#" +
-                                response.requestId + ", will retry");
-                    }
-                }
+            // 5. Obsługa wyniku
+            if (response.success && response.type == BufferMessage.Type.PUT_RESPONSE) {
+                System.out.println("Prod " + producerId + ": SUCCESS " + item + " @ Buf " + targetBuf);
+                itemCounter++;
+            } else {
+                System.out.println("Prod " + producerId + ": REJECTED (Full) @ Buf " + targetBuf);
+                // W następnym obiegu pętli spróbuje ponownie (nowa losowa przerwa, nowy losowy bufor)
             }
         }
-
-        System.out.println("Producer " + producerId + " finished, produced " + itemsProduced + " items");
-    }
-
-    private int countPendingRequests(int[] pendingRequests) {
-        int count = 0;
-        for (int req : pendingRequests) {
-            count += req;
-        }
-        return count;
-    }
-
-    private boolean hasPendingRequests(int[] pendingRequests) {
-        for (int req : pendingRequests) {
-            if (req > 0) return true;
-        }
-        return false;
     }
 }
