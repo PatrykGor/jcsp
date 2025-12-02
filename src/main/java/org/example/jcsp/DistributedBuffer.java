@@ -2,8 +2,8 @@ package org.example.jcsp;
 import org.jcsp.lang.*;
 
 class DistributedBuffer implements CSProcess {
-    private final AltingChannelInput<BufferMessage> in;
-    private final ChannelOutput<BufferMessage> out;
+    private final AltingChannelInput<BufferMessage>[] inputs;
+    private final ChannelOutput<BufferMessage>[] outputs;
     private final int bufferId;
     private final int capacity;
     private final int[] buffer;
@@ -11,10 +11,11 @@ class DistributedBuffer implements CSProcess {
     private int front = 0;
     private int rear = 0;
 
-    public DistributedBuffer(AltingChannelInput<BufferMessage> in, ChannelOutput<BufferMessage> out,
+    public DistributedBuffer(AltingChannelInput<BufferMessage>[] inputs,
+                             ChannelOutput<BufferMessage>[] outputs,
                              int bufferId, int capacity) {
-        this.in = in;
-        this.out = out;
+        this.inputs = inputs;
+        this.outputs = outputs;
         this.bufferId = bufferId;
         this.capacity = capacity;
         this.buffer = new int[capacity];
@@ -22,77 +23,49 @@ class DistributedBuffer implements CSProcess {
 
     @Override
     public void run() {
-        final Alternative alt = new Alternative(new Guard[] { in });
-
-        System.out.println("Buffer " + bufferId + " started with capacity " + capacity);
+        final Alternative alt = new Alternative(inputs);
+        System.out.println("Buffer " + bufferId + " STARTED.");
 
         while (true) {
-            // Wait for incoming messages
-            int index = alt.select();
+            // Czekaj na dowolne żądanie
+            int clientIndex = alt.select();
+            BufferMessage msg = inputs[clientIndex].read();
 
-            if (index == 0) {
-                BufferMessage msg = (BufferMessage) in.read();
+            boolean success = false;
+            int responseData = -1;
 
-                switch (msg.type) {
-                    case PUT_REQUEST:
-                        handlePutRequest(msg);
-                        break;
-                    case GET_REQUEST:
-                        handleGetRequest(msg);
-                        break;
-                    default:
-                        System.out.println("Buffer " + bufferId + ": Unknown message type");
-                }
+            switch (msg.type) {
+                case PUT_REQUEST:
+                    if (count < capacity) {
+                        buffer[rear] = msg.data;
+                        rear = (rear + 1) % capacity;
+                        count++;
+                        success = true;
+                        // Opcjonalnie: logowanie tylko udanych operacji, żeby nie spamować konsoli
+                        System.out.println("  -> Buffer " + bufferId + " PUT " + msg.data + " (Size: " + count + ")");
+                    }
+                    responseData = msg.data;
+                    break;
+
+                case GET_REQUEST:
+                    if (count > 0) {
+                        responseData = buffer[front];
+                        front = (front + 1) % capacity;
+                        count--;
+                        success = true;
+                        System.out.println("  <- Buffer " + bufferId + " GET " + responseData + " (Size: " + count + ")");
+                    }
+                    break;
             }
+
+            // Odsyłamy odpowiedź do TEGO SAMEGO klienta
+            BufferMessage response = new BufferMessage(
+                    msg.type == BufferMessage.Type.PUT_REQUEST ? BufferMessage.Type.PUT_RESPONSE : BufferMessage.Type.GET_RESPONSE,
+                    responseData,
+                    msg.requestId,
+                    success
+            );
+            outputs[clientIndex].write(response);
         }
-    }
-
-    private void handlePutRequest(BufferMessage msg) {
-        boolean success = false;
-
-        if (count < capacity) {
-            buffer[rear] = msg.data;
-            rear = (rear + 1) % capacity;
-            count++;
-            success = true;
-            System.out.println("Buffer " + bufferId + ": PUT item=" + msg.data +
-                    " (count=" + count + "/" + capacity + ")");
-        } else {
-            System.out.println("Buffer " + bufferId + ": PUT FAILED - buffer full");
-        }
-
-        // Send response
-        BufferMessage response = new BufferMessage(
-                BufferMessage.Type.PUT_RESPONSE,
-                msg.data,
-                msg.requestId,
-                success
-        );
-        out.write(response);
-    }
-
-    private void handleGetRequest(BufferMessage msg) {
-        boolean success = false;
-        int data = -1;
-
-        if (count > 0) {
-            data = buffer[front];
-            front = (front + 1) % capacity;
-            count--;
-            success = true;
-            System.out.println("Buffer " + bufferId + ": GET item=" + data +
-                    " (count=" + count + "/" + capacity + ")");
-        } else {
-            System.out.println("Buffer " + bufferId + ": GET FAILED - buffer empty");
-        }
-
-        // Send response
-        BufferMessage response = new BufferMessage(
-                BufferMessage.Type.GET_RESPONSE,
-                data,
-                msg.requestId,
-                success
-        );
-        out.write(response);
     }
 }

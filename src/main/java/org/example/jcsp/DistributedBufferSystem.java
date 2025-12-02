@@ -7,79 +7,74 @@ public class DistributedBufferSystem {
     private static final int NUM_PRODUCERS = 2;
     private static final int NUM_CONSUMERS = 2;
     private static final int BUFFER_CAPACITY = 5;
-    private static final int ITEMS_PER_PRODUCER = 10;
-    private static final int ITEMS_PER_CONSUMER = 10;
 
     public static void main(String[] args) {
-        System.out.println("Starting Distributed Buffer System...");
-        System.out.println("Buffers: " + NUM_BUFFERS +
-                ", Producers: " + NUM_PRODUCERS +
-                ", Consumers: " + NUM_CONSUMERS);
+        System.out.println("System: Starting Infinite Loop Simulation...");
 
-        // Create channels for communication
-        One2OneChannel<BufferMessage>[][] bufferChannels = new One2OneChannel[NUM_BUFFERS][2];
-        One2OneChannel<BufferMessage>[][] producerChannels = new One2OneChannel[NUM_PRODUCERS][2];
-        One2OneChannel<BufferMessage>[][] consumerChannels = new One2OneChannel[NUM_CONSUMERS][2];
+        // 1. MACIERZE KANAŁÓW [ID_Procesu][ID_Bufora]
+        One2OneChannel<BufferMessage>[][] prodReq = new One2OneChannel[NUM_PRODUCERS][NUM_BUFFERS];
+        One2OneChannel<BufferMessage>[][] prodResp = new One2OneChannel[NUM_PRODUCERS][NUM_BUFFERS];
 
-        // Initialize channels
-        for (int i = 0; i < NUM_BUFFERS; i++) {
-            bufferChannels[i] = Channel.one2oneArray(2);
-        }
-        for (int i = 0; i < NUM_PRODUCERS; i++) {
-            producerChannels[i] = Channel.one2oneArray(2);
-        }
-        for (int i = 0; i < NUM_CONSUMERS; i++) {
-            consumerChannels[i] = Channel.one2oneArray(2);
+        One2OneChannel<BufferMessage>[][] consReq = new One2OneChannel[NUM_CONSUMERS][NUM_BUFFERS];
+        One2OneChannel<BufferMessage>[][] consResp = new One2OneChannel[NUM_CONSUMERS][NUM_BUFFERS];
+
+        // Inicjalizacja kanałów
+        for (int b = 0; b < NUM_BUFFERS; b++) {
+            for (int p = 0; p < NUM_PRODUCERS; p++) {
+                prodReq[p][b] = Channel.one2one();
+                prodResp[p][b] = Channel.one2one();
+            }
+            for (int c = 0; c < NUM_CONSUMERS; c++) {
+                consReq[c][b] = Channel.one2one();
+                consResp[c][b] = Channel.one2one();
+            }
         }
 
-        // Create processes
         CSProcess[] processes = new CSProcess[NUM_BUFFERS + NUM_PRODUCERS + NUM_CONSUMERS];
-        int processIndex = 0;
+        int index = 0;
 
-        // Create buffers
-        for (int i = 0; i < NUM_BUFFERS; i++) {
-            processes[processIndex++] = new DistributedBuffer(
-                    bufferChannels[i][0].in(),
-                    bufferChannels[i][1].out(),
-                    i,
-                    BUFFER_CAPACITY
-            );
+        // 2. TWORZENIE BUFORÓW
+        for (int b = 0; b < NUM_BUFFERS; b++) {
+            // Zbieramy wejścia/wyjścia
+            AltingChannelInput<BufferMessage>[] inputs = new AltingChannelInput[NUM_PRODUCERS + NUM_CONSUMERS];
+            ChannelOutput<BufferMessage>[] outputs = new ChannelOutput[NUM_PRODUCERS + NUM_CONSUMERS];
+
+            int k = 0;
+            for (int p = 0; p < NUM_PRODUCERS; p++) inputs[k++] = prodReq[p][b].in();
+            for (int c = 0; c < NUM_CONSUMERS; c++) inputs[k++] = consReq[c][b].in();
+
+            k = 0; // Reset dla outputs (kolejność musi być identyczna jak inputs!)
+            for (int p = 0; p < NUM_PRODUCERS; p++) outputs[k++] = prodResp[p][b].out();
+            for (int c = 0; c < NUM_CONSUMERS; c++) outputs[k++] = consResp[c][b].out();
+
+            processes[index++] = new DistributedBuffer(inputs, outputs, b, BUFFER_CAPACITY);
         }
 
-        // Create producers
-        for (int i = 0; i < NUM_PRODUCERS; i++) {
-            ChannelOutput<BufferMessage>[] bufferInputs = new ChannelOutput[NUM_BUFFERS];
-            for (int j = 0; j < NUM_BUFFERS; j++) {
-                bufferInputs[j] = bufferChannels[j][0].out();
+        // 3. TWORZENIE PRODUCENTÓW
+        for (int p = 0; p < NUM_PRODUCERS; p++) {
+            ChannelOutput<BufferMessage>[] toBuffers = new ChannelOutput[NUM_BUFFERS];
+            AltingChannelInput<BufferMessage>[] fromBuffers = new AltingChannelInput[NUM_BUFFERS];
+
+            for (int b = 0; b < NUM_BUFFERS; b++) {
+                toBuffers[b] = prodReq[p][b].out();
+                fromBuffers[b] = prodResp[p][b].in();
             }
-
-            processes[processIndex++] = new Producer(
-                    bufferInputs,
-                    new AltingChannelInput[] { producerChannels[i][1].in() },
-                    i,
-                    ITEMS_PER_PRODUCER
-            );
+            processes[index++] = new Producer(toBuffers, fromBuffers, p);
         }
 
-        // Create consumers
-        for (int i = 0; i < NUM_CONSUMERS; i++) {
-            ChannelOutput<BufferMessage>[] bufferInputs = new ChannelOutput[NUM_BUFFERS];
-            for (int j = 0; j < NUM_BUFFERS; j++) {
-                bufferInputs[j] = bufferChannels[j][0].out();
+        // 4. TWORZENIE KONSUMENTÓW
+        for (int c = 0; c < NUM_CONSUMERS; c++) {
+            ChannelOutput<BufferMessage>[] toBuffers = new ChannelOutput[NUM_BUFFERS];
+            AltingChannelInput<BufferMessage>[] fromBuffers = new AltingChannelInput[NUM_BUFFERS];
+
+            for (int b = 0; b < NUM_BUFFERS; b++) {
+                toBuffers[b] = consReq[c][b].out();
+                fromBuffers[b] = consResp[c][b].in();
             }
-
-            processes[processIndex++] = new Consumer(
-                    bufferInputs,
-                    new AltingChannelInput[] { consumerChannels[i][1].in() },
-                    i,
-                    ITEMS_PER_CONSUMER
-            );
+            processes[index++] = new Consumer(toBuffers, fromBuffers, c);
         }
 
-        // Create and run the parallel system
-        Parallel parallel = new Parallel(processes);
-        parallel.run();
-
-        System.out.println("Distributed Buffer System finished!");
+        // Uruchomienie równoległe - program nigdy się nie skończy
+        new Parallel(processes).run();
     }
 }
