@@ -25,26 +25,36 @@ class Consumer implements CSProcess {
             // 1. Losowa przerwa (symulacja konsumpcji)
             try {
                 Thread.sleep(random.nextInt(1000) + 500); // 0.5s - 1.5s
-            } catch (InterruptedException e) {}
+            } catch (InterruptedException e) {
+            }
 
             // 2. Wybór losowego bufora
-            int targetBuf = random.nextInt(toBuffers.length);
             requestId++;
+            boolean success = false;
+            BufferMessage response = null;
+            int targetBuf = -1;
+            while (!success) {
+                targetBuf = random.nextInt(toBuffers.length);
 
-            // 3. Wysłanie żądania
-            BufferMessage req = new BufferMessage(BufferMessage.Type.GET_REQUEST, -1, requestId, false);
-            // System.out.println("Cons " + consumerId + " trying to GET from Buf " + targetBuf);
-            toBuffers[targetBuf].write(req);
+                // 3. Wysłanie żądania
+                BufferMessage req = new BufferMessage(BufferMessage.Type.GET_REQUEST, -1, requestId, false);
+                toBuffers[targetBuf].write(req);
 
-            // 4. Odbiór odpowiedzi (czekamy na ten konkretny bufor)
-            BufferMessage response = fromBuffers[targetBuf].read();
+                // 4. Odbiór odpowiedzi (czekamy na ten konkretny bufor)
+                response = fromBuffers[targetBuf].read();
 
-            // 5. Obsługa wyniku
-            if (response.success && response.type == BufferMessage.Type.GET_RESPONSE) {
-                System.out.println("Cons " + consumerId + ": ATE " + response.data + " from Buf " + targetBuf);
-            } else {
-                System.out.println("Cons " + consumerId + ": REJECTED (Empty) @ Buf " + targetBuf);
+                // 5. Obsługa wyniku
+                success = response.type == BufferMessage.Type.GET_RESPONSE ? response.success : false;
+                if (!success) {
+                    System.out.println("Cons " + consumerId + ": REJECTED (Empty) @ Buf " + targetBuf);
+                }
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
             }
-        }
+                System.out.println("Cons " + consumerId + ": ATE " + response.data + " from Buf " + targetBuf);
+            }
     }
 }

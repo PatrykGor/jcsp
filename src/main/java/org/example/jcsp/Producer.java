@@ -29,9 +29,13 @@ class Producer implements CSProcess {
             } catch (InterruptedException e) {}
 
             // 2. Wybór losowego bufora
-            int targetBuf = random.nextInt(toBuffers.length);
-            int item = producerId * 1000 + itemCounter;
             requestId++;
+            int item = producerId * 1000 + itemCounter;
+            boolean success = false;
+            BufferMessage response = null;
+            int targetBuf = -1;
+            while (!success) {
+            targetBuf = random.nextInt(toBuffers.length);
 
             // 3. Wysłanie żądania (BLOKUJĄCE, jeśli bufor jest zajęty obsługą innego wątku)
             BufferMessage req = new BufferMessage(BufferMessage.Type.PUT_REQUEST, item, requestId, false);
@@ -40,16 +44,19 @@ class Producer implements CSProcess {
 
             // 4. Odbiór odpowiedzi (BLOKUJĄCE - czekamy aż ten konkretny bufor odpowie)
             // Nie potrzebujemy Alternative, bo wiemy dokładnie, gdzie wysłaliśmy
-            BufferMessage response = fromBuffers[targetBuf].read();
+            response = fromBuffers[targetBuf].read();
 
-            // 5. Obsługa wyniku
-            if (response.success && response.type == BufferMessage.Type.PUT_RESPONSE) {
-                System.out.println("Prod " + producerId + ": SUCCESS " + item + " @ Buf " + targetBuf);
-                itemCounter++;
-            } else {
-                System.out.println("Prod " + producerId + ": REJECTED (Full) @ Buf " + targetBuf);
-                // W następnym obiegu pętli spróbuje ponownie (nowa losowa przerwa, nowy losowy bufor)
+                success = response.type == BufferMessage.Type.PUT_RESPONSE ? response.success : false;
+                if (!success) {
+                    System.out.println("Prod " + producerId + ": REJECTED (Full) @ Buf " + targetBuf);
+                }
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
             }
+            System.out.println("Prod " + producerId + ": SUCCESS " + item + " @ Buf " + targetBuf);
         }
     }
 }

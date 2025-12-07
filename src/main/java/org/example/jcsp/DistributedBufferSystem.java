@@ -35,7 +35,6 @@ public class DistributedBufferSystem {
 
         // 2. TWORZENIE BUFORÓW
         for (int b = 0; b < NUM_BUFFERS; b++) {
-            // Zbieramy wejścia/wyjścia
             AltingChannelInput<BufferMessage>[] inputs = new AltingChannelInput[NUM_PRODUCERS + NUM_CONSUMERS];
             ChannelOutput<BufferMessage>[] outputs = new ChannelOutput[NUM_PRODUCERS + NUM_CONSUMERS];
 
@@ -43,7 +42,7 @@ public class DistributedBufferSystem {
             for (int p = 0; p < NUM_PRODUCERS; p++) inputs[k++] = prodReq[p][b].in();
             for (int c = 0; c < NUM_CONSUMERS; c++) inputs[k++] = consReq[c][b].in();
 
-            k = 0; // Reset dla outputs (kolejność musi być identyczna jak inputs!)
+            k = 0;
             for (int p = 0; p < NUM_PRODUCERS; p++) outputs[k++] = prodResp[p][b].out();
             for (int c = 0; c < NUM_CONSUMERS; c++) outputs[k++] = consResp[c][b].out();
 
@@ -74,7 +73,6 @@ public class DistributedBufferSystem {
             processes[index++] = new Consumer(toBuffers, fromBuffers, c);
         }
 
-        // Uruchomienie równoległe - program nigdy się nie skończy
         new Parallel(processes).run();
     }
 }

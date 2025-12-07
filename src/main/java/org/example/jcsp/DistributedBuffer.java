@@ -27,7 +27,6 @@ class DistributedBuffer implements CSProcess {
         System.out.println("Buffer " + bufferId + " STARTED.");
 
         while (true) {
-            // Czekaj na dowolne żądanie
             int clientIndex = alt.select();
             BufferMessage msg = inputs[clientIndex].read();
 
@@ -41,7 +40,6 @@ class DistributedBuffer implements CSProcess {
                         rear = (rear + 1) % capacity;
                         count++;
                         success = true;
-                        // Opcjonalnie: logowanie tylko udanych operacji, żeby nie spamować konsoli
                         System.out.println("  -> Buffer " + bufferId + " PUT " + msg.data + " (Size: " + count + ")");
                     }
                     responseData = msg.data;
@@ -58,7 +56,6 @@ class DistributedBuffer implements CSProcess {
                     break;
             }
 
-            // Odsyłamy odpowiedź do TEGO SAMEGO klienta
             BufferMessage response = new BufferMessage(
                     msg.type == BufferMessage.Type.PUT_REQUEST ? BufferMessage.Type.PUT_RESPONSE : BufferMessage.Type.GET_RESPONSE,
                     responseData,

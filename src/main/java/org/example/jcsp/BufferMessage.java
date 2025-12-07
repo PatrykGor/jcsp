@@ -2,7 +2,6 @@ package org.example.jcsp;
 
 import java.io.Serializable;
 
-// Message types for communication
 class BufferMessage implements Serializable {
     public enum Type { PUT_REQUEST, PUT_RESPONSE, GET_REQUEST, GET_RESPONSE }
     public Type type;
