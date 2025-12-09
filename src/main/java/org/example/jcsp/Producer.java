@@ -48,15 +48,15 @@ class Producer implements CSProcess {
 
                 success = response.type == BufferMessage.Type.PUT_RESPONSE ? response.success : false;
                 if (!success) {
-                    System.out.println("Prod " + producerId + ": REJECTED (Full) @ Buf " + targetBuf);
+                    //System.out.println("Prod " + producerId + ": REJECTED (Full) @ Buf " + targetBuf);
                 }
                 try {
-                    Thread.sleep(50);
+                    Thread.sleep(10);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             }
-            System.out.println("Prod " + producerId + ": SUCCESS " + item + " @ Buf " + targetBuf);
+            //System.out.println("Prod " + producerId + ": SUCCESS " + item + " @ Buf " + targetBuf);
         }
     }
 }

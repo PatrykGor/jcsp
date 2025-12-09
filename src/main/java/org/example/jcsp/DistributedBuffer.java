@@ -11,14 +11,17 @@ class DistributedBuffer implements CSProcess {
     private int front = 0;
     private int rear = 0;
 
+    private final OperationStats stats;
+
     public DistributedBuffer(AltingChannelInput<BufferMessage>[] inputs,
                              ChannelOutput<BufferMessage>[] outputs,
-                             int bufferId, int capacity) {
+                             int bufferId, int capacity, OperationStats stats) {
         this.inputs = inputs;
         this.outputs = outputs;
         this.bufferId = bufferId;
         this.capacity = capacity;
         this.buffer = new int[capacity];
+        this.stats = stats;
     }
 
     @Override
@@ -40,7 +43,10 @@ class DistributedBuffer implements CSProcess {
                         rear = (rear + 1) % capacity;
                         count++;
                         success = true;
-                        System.out.println("  -> Buffer " + bufferId + " PUT " + msg.data + " (Size: " + count + ")");
+                        stats.incSuccessPut();
+                        //System.out.println("  -> Buffer " + bufferId + " PUT " + msg.data + " (Size: " + count + ")");
+                    }else{
+                        stats.incFailedPut();
                     }
                     responseData = msg.data;
                     break;
@@ -51,7 +57,10 @@ class DistributedBuffer implements CSProcess {
                         front = (front + 1) % capacity;
                         count--;
                         success = true;
-                        System.out.println("  <- Buffer " + bufferId + " GET " + responseData + " (Size: " + count + ")");
+                        stats.incSuccessGet();
+                        //System.out.println("  <- Buffer " + bufferId + " GET " + responseData + " (Size: " + count + ")");
+                    }else{
+                        stats.incFailedGet();
                     }
                     break;
             }

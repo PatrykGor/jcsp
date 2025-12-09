@@ -46,15 +46,15 @@ class Consumer implements CSProcess {
                 // 5. Obsługa wyniku
                 success = response.type == BufferMessage.Type.GET_RESPONSE ? response.success : false;
                 if (!success) {
-                    System.out.println("Cons " + consumerId + ": REJECTED (Empty) @ Buf " + targetBuf);
+                    //System.out.println("Cons " + consumerId + ": REJECTED (Empty) @ Buf " + targetBuf);
                 }
                 try {
-                    Thread.sleep(50);
+                    Thread.sleep(10);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             }
-                System.out.println("Cons " + consumerId + ": ATE " + response.data + " from Buf " + targetBuf);
+                //System.out.println("Cons " + consumerId + ": ATE " + response.data + " from Buf " + targetBuf);
             }
     }
 }
