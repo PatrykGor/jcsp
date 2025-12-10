@@ -7,6 +7,7 @@ class Producer implements CSProcess {
     private final AltingChannelInput<BufferMessage>[] fromBuffers;
     private final int producerId;
     private final Random random = new Random();
+    private volatile boolean running = true;
 
     public Producer(ChannelOutput<BufferMessage>[] toBuffers,
                     AltingChannelInput<BufferMessage>[] fromBuffers,
@@ -16,13 +17,18 @@ class Producer implements CSProcess {
         this.producerId = producerId;
     }
 
+    public static int getNext(int max) {
+        Random rand = new Random();
+        return (int) (Math.log(1-rand.nextDouble())/(-0.5) % max);
+    }
+
     @Override
     public void run() {
         System.out.println("Producer " + producerId + " STARTED.");
         int itemCounter = 0;
         int requestId = 0;
 
-        while (true) {
+        while (running) {
             // 1. Losowa przerwa (symulacja produkcji)
             try {
                 Thread.sleep(random.nextInt(1000) + 500); // 0.5s - 1.5s
@@ -35,6 +41,7 @@ class Producer implements CSProcess {
             BufferMessage response = null;
             int targetBuf = -1;
             while (!success) {
+            //targetBuf = getNext(toBuffers.length);
             targetBuf = random.nextInt(toBuffers.length);
 
             // 3. Wysłanie żądania (BLOKUJĄCE, jeśli bufor jest zajęty obsługą innego wątku)
@@ -58,5 +65,9 @@ class Producer implements CSProcess {
             }
             //System.out.println("Prod " + producerId + ": SUCCESS " + item + " @ Buf " + targetBuf);
         }
+    }
+
+    public void stop() {
+        running = false;
     }
 }

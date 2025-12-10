@@ -12,6 +12,7 @@ class DistributedBuffer implements CSProcess {
     private int rear = 0;
 
     private final OperationStats stats;
+    private volatile boolean running = true;
 
     public DistributedBuffer(AltingChannelInput<BufferMessage>[] inputs,
                              ChannelOutput<BufferMessage>[] outputs,
@@ -29,7 +30,7 @@ class DistributedBuffer implements CSProcess {
         final Alternative alt = new Alternative(inputs);
         System.out.println("Buffer " + bufferId + " STARTED.");
 
-        while (true) {
+        while (running) {
             int clientIndex = alt.select();
             BufferMessage msg = inputs[clientIndex].read();
 
@@ -73,5 +74,9 @@ class DistributedBuffer implements CSProcess {
             );
             outputs[clientIndex].write(response);
         }
+    }
+
+    public  void stop() {
+        running = false;
     }
 }
